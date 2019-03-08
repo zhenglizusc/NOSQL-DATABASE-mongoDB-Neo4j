@@ -1,0 +1,111 @@
+//**********************// 
+//***** Approach ******//
+// ******************** //
+
+// 1. What are some differences between document databases (MongoDB)  
+// and graph databases (Neo4j)?
+//1)MongoDB is schemaless and provides holistic view of the data with eventual 
+//consistency with update information-in-place principle;
+//2)MongoDB has aggregate framework, but Neo4J does not not ?? 
+//3)MongoDB does not create relationships between the database models, as each 
+//data set stored in the document store of the database is disaggregated and independent. 
+//A graph system requires handling the complex relationship of the database??
+//4)Neo4J enables navigation through the graphs as a tree, where MongoDB cannot provide 
+//visualization of the document stores as graphs 
+
+ 
+// 2. What are vertices and edges, what are other names for these,
+// and what are some good use cases for Graph databases ? 
+//Node: node are often used to represent entities
+//Relationship/Edges: connects two nodes, and is guaranteed to have a valid source and target node
+//Properties:Properties are named values where the name (or key) is a string
+//Labels:A label is a named graph construct that is used to group nodes into sets; all nodes 
+//       labeled with the same label belongs to the same set. 
+//Good use cases for Graph databases:Fraud Detection&Analytic Solution, Knowledge Graph, Network and 
+//database infrastructure, recommendation engine
+
+
+// 3. What are the building blocks of Neo4j? What are the analogous components in relational databases?
+//Vertices/Nodes,Labels,Properties,Edges/Relationships
+// in relational database, the analogous components are records/rows in tables(node in Neo4j), 
+// the table(labels in Neo4j), the columns(thd properties in Neo4j), and additional tables with foreign key(Edges in Neo4j)
+
+
+// 4. Write the following in cypher: 
+// find a person that either has directed or produced a movie that some other person has acted in.
+// Return the first and second person's name,  relationship type and the movie title.
+match (p1:Person) -[r:DIRECTED|PRODUCED]->(m:Movie)<- [:ACTED_IN]-(p2:Person)
+where not (p1) -[:ACTED_IN]->(m)
+return p1.name, p2.name, type(r), m.title
+
+
+//***********************// 
+//*** Implementation ***//
+// ******************* //
+
+//** Use Movie dataset in Neo4j that we used in class **//
+
+// 5. Find all the actors who worked with Gene Hackman. Return only
+// distinct names.
+match(p1:Person)-[:ACTED_IN]->(m)<-[:ACTED_IN]-(p2:Person{name:"Gene Hackman"})
+return distinct p1.name
+
+
+// 6. Return all the movies (as Movies) Keanu Reeves has acted in as well as the actor's
+// name as Actor. Use the collect aggregation operator. See https://bit.ly/2Oijmyi. 
+// COLLECT syntax:
+// match (n)-[r]->(m)
+// return collect(m.attribute) 
+match (p:Person{name:"Keanu Reeves"}) -[:ACTED_IN]->(m:Movie)
+return collect(m.title), p.name as Actor
+
+
+// 7. Return the names of all the directors each actor has worked with.
+// Rename actor's name as Actor and directors as Directors.
+match (p1:Person)-[:ACTED_IN]->(m)<-[:DIRECTED]-(p2:Person)
+return p1.name as Actor, collect(p2.name) as Directors
+
+
+// 8. Return the count of movies in which each actor has acted by actor name and
+// count of movies. 
+// COUNT syntax and here for more info https://bit.ly/2MwN68M:
+// return count(expression)
+match (p:Person)-[:ACTED_IN]->(m)
+return p.name,count(m.title)
+
+
+// 9. Return the list and the count of the movies that an actor and director have worked on.
+// Return actor's name as Actor, director's name as Director, count as MovieCount and
+// list (i.e. collect()) of movies as Movies.
+
+// Notes: here, if we count into the same actor and same director, then the following is correct:
+match (a:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(d:Person)
+return a.name as Actor, d.name as Director, count(m.title) as MovieCount, collect(m.title) as Movies
+// Notes: here, if we do not count into the same actor and same director, then the following is correct:
+match (a:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(d:Person)
+where a<>d
+return a.name as Actor, d.name as Director, count(m.title) as MovieCount, collect(m.title) as Movies
+
+
+// 10. Who are the top 3 actors who acted in the most number of movies? Return
+// the actors' names, the count, and the list of movies.
+match (p:Person)-[:ACTED_IN]->(m)
+return p.name as Actor, count(m.title) as MovieCount, collect(m.title) as Movies
+order by MovieCount desc
+limit 3
+//Tom Hanks,Keanu Reeves,Meg Ryan acted in the most number of movies
+
+
+
+// 11. Find actors where the number of roles they have acted in is greater than 3. Return the
+// list of movies, actors name, and roles as an array. To get the size of the array, use the
+// "size" operator i.e. size(expression)
+
+// WITH with ref https://bit.ly/2p86v6N
+// manipulate data before next "stage" - similar to $project in MongoDB. Use this stage
+// to calculate number of roles and collect number of movies. Rename all of parts of the
+// with stage i.e. with m.title as Movies.
+match (p:Person)-[r:ACTED_IN]-> (m)
+WITH collect(m.title) as Movies, p.name as Actor, sum(size(r.roles)) as Number_of_roles,collect(r.roles) as Roles
+where Number_of_roles >3
+return Actor,Movies,Roles
