@@ -1,0 +1,641 @@
+//Section 1 - Approach
+//1. What are some good use cases for NoSQL databases and why: Can you name some companies using NoSQL solutions today?
+//--Use case for NoSQL databases??? 1)Real-Time Big Data--- The real time data is most unstructured.If using Sql, the data 
+//could not be updatde in time.  2)Content Management--- The key to effective content is the ability to select a variety 
+//of content and store it in a data lake, which means that the data format might be totally different. 3) Internet of 
+//Things--??? everything from smartphones and tablets to home appliances and systems installed in cars, hospitals and warehouses. 
+//The volume, velocity, and variety of machine-generated data are increasing
+//-- Some companies using NoSQL solutions today: Uber,Sony Pictures Entertainment, OpenX
+
+//2. What are the motivations for choosing NoSQL databases as a data warehousing solution?
+//--1)Advent of the web 2)The Data Lake nowadays has data with totally different format, which could not be stored in a uniform 
+//construction.However, NoSQL database is convenient for such kind of situation
+
+//3. What does the E in BASE stand for and what does it mean? Demonstrate by a practical example.
+//-- Eventually consistency,indicating that the system will become consistent over time, given that the system doesn't receive 
+//input during that time.  For example, when we enter data into the database, it might not display the latest data immediately, 
+// but finally it would show the updated information.That's to say, lazily at read time
+
+//4. You are assigned the task of building a database model to describe the relationship between employees and who they work with 
+//in your new amazing company. You want to answer the following queries: how many employees does Employee A work with? Does Employee 
+//A work with anyone who works with Employee B? What type of NoSQL database is best suited for this? What would be a runner up?
+//-- how many employees does Employee A work with?----- Best:Use Key-value stores     Runner Up:Relational
+//--Does Employee A work with anyone who works with Employee B? ---- Use Graph databases   Runner Up:Relational
+
+
+
+//Section 2 - Implementation
+//5. How many athletes from London who are 25 years old won some kind of medal
+// in 2012----  179 athletes
+db.athletes.find({City:"London",Age:25,Year:2012,Medal:{$ne:"NA"}}).count()
+179
+
+//6. What???s the count of all the people from Italy who won a Gold plus all the people
+//from Jamaica who did not win one ? How do you know or how can you show that
+//number is right (e.g. breakdown)? 
+//The total count is 1266, I breakdown these two parts can calculate that 575+691 = 1266, 
+//so the answer is correct. 
+db.athletes.find({$and:[{NOC:"ITA"},{Medal:"Gold"}]}).count()
+575
+db.athletes.find({$and:[{NOC:"JAM"},{Medal:{$ne:"Gold"}}]}).count()
+810
+db.athletes.find({$or:[{$and:[{NOC:"ITA"}, {Medal:"Gold"}]},{$and:[{NOC:"JAM"},{Medal:{$ne:"Gold"}}]}]}).count()
+1385
+
+//7. How many athletes are involved in a high jump event ?
+db.athletes.find({Event:{$regex:"High Jump"}}).count()
+1499
+
+//8. Who's the youngest player ever to win a Gold in a 1,000 metres event  ()
+db.athletes.find({$and:[{Event:{$regex:"1,000 metres"}},{Medal:"Gold"}]},{_id:0,Name:1}).sort({Age:1}).limit(1)
+{ "Name" : "Monika Gawenus-Holzner-Pflug" }
+
+//9. How many female athletes under 30 years old but greater than 20 won the Gold?
+db.athletes.find({$and:[{Sex:"F"},{Age:{$lt:30}},{Age:{$gt:20}},{Medal:"Gold"}]}).count()
+2326
+
+//Import Nobel.json to mongodb
+
+//10.How many nobel laureates who were born in the US won a prize in chemistry?
+db.nobel.find({$and:[{'prizes.category':"chemistry"},{"bornCountry":"USA"}]}).count()
+52
+
+// Bonus
+///Method1: Calculate for four conditions and calculate the total
+db.nobel.find({$and:[{'prizes.category':"chemistry"},{"bornCountry":"USA"}]}).count()
+52
+db.nobel.find({$and:[{'prizes.category':"chemistry"},{"bornCountry":"France"}]}).count()
+9
+db.nobel.find({$and:[{'prizes.category':"physics"},{"bornCountry":"France"}]}).count()
+7
+db.nobel.find({$and:[{'prizes.category':"physics"},{"bornCountry":"USA"}]}).count()
+67
+///Calculate: 52+9+7+67 = 135
+
+///Method2: Use query for one time
+db.nobel.find({$and:[{'prizes.category':{$in:["chemistry","physics"]}},{'bornCountry':{$in:["USA","France"]}}]}).count()
+135
+
+
+//11. Find all restaurants where all the grades of that restaurant are not older than
+//2014. How many are there? ---- There are 5
+db.restaurants.find({'grades.date':{$not:{$lt:ISODate("2014-01-01")}}}).count()
+5
+
+//Bonus:What???s the restaurant with the most recent grade whose grade is not ???Not Yet Graded???? ----- The restaurant is 'Cafe Un Deux Trois'.
+db.restaurants.find({'grades.grade':{$ne:'Not Yet Graded'}},{_id:0,name:1}).sort({'grades.date':-1}).limit(1)
+{ "name" : "Cafe Un Deux Trois" }
+
+
+
+
+
+
+
+
+
+
+//**********************// 
+//***** Approach ******//
+// ******************** //
+// Section worth 8 points
+
+// Question 1
+// What are some of the pros/cons of the .find() query? 
+// Answer: Advantage: .find() can easily do listing and interpreting.
+//         Disadvantage: .find() can not do advanced calculations and transforming of documents 
+
+// Question 2
+// What is the aggregation pipeline and in what cases we should use it?
+// Answer: The aggregation pipeline is a framework for data aggregation modeled on the concept of data processing pipelines. 
+// Documents enter a multi-stage pipeline that transforms the documents into aggregated results.
+// We shall use it when doing advanced calculations or data processing
+
+// Question 3
+// Can you describe what is basically happening in this query?
+// Car Collection
+
+//match = {$match: {
+//   "car_make": "tesla"
+//}}
+//group={$group:{
+//   _id:{
+//        color:"$color",
+//        month:{$month: "date_sold"}
+//    },
+//   tr:{$sum:{$multiply:["$price", "$numSold"]}},
+//}}
+//sort = {"tr":-1}
+
+//db.cars.aggregate([match, group])
+
+// Answer: 
+// the match operator finds the records whose "car_make" is "tesla";
+// The group operator collects all documents with the same 'color' and same 'date_sold'.
+//     The $month operator converts the values of the 'date_sold' to integer representations of the month. 
+//     Then the $group operator create a new document with two fields:
+//        _id: which contains a nested document with the color and the month of 'date_sold';
+//        tr: which is a generated field that calculate the price* numsold for each "_id"
+// The sort operator sorts the tr in descending order.
+// Finally, this pipeline give us color, month of sold date, and total revenue of 'tesla' cars, which is in a descending order for total revenue.
+
+
+
+
+
+//**********************// 
+//*** Implementation ****//
+// ******************** //
+// Each problem is worth 8 points
+// General References for below:
+// SQL to Aggregate Pipeline - https://docs.mongodb.com/manual/reference/sql-aggregation-comparison/
+// Agg Pipeline Quick Reference - https://docs.mongodb.com/manual/meta/aggregation-quick-reference/#text-expression-operator
+// The above, especially the Quick Reference will contain all the reference material for all the functions below.
+// If you a question, visit the quick reference, read about the relevant operator and click on on it to learn more. 
+
+
+
+
+// Question 4 - $group on key, $match, $group, $project, $multiply, $size
+// For each unique event(listings collection) category (key=listing_type), sum the 
+// price (key=price) over all  events in that category 
+group = {$group: {
+    _id:"$listing_type", 
+    total:{$sum: "$price"}
+}}
+
+project = {$project: {_id:0, listing_type:"$_id", Sum_Of_Price:"$total"}}
+query = db.listings.aggregate([ group, project])
+
+
+// Question 5 - $match and $match (having) after $group, $project
+// Same as the previous question, but only show for where the revenue (size of 
+// paid_users and $price key) is greater than ($gt) 100. Return the grouped by 
+// parameter as "category", the revenue paid attendees (key=paid_users), and 
+// compute the average amount spent. Exlude the _id.
+group = {$group:{
+    _id: "$listing_type",
+    revenue: {$sum:{$multiply:[{$size:"$paid_users"},"$price"]}},
+    count:{$sum:{$size:"$paid_users"}}
+}}
+
+match = {$match:{"revenue":{$gt:100}}}
+
+project = {$project:{_id:0,Category:"$_id",Revenue_Paid_Attendees: "$revenue",Average_Amount_Spent:{$divide:["$revenue","$count"]}}}
+
+query = db.listings.aggregate([group,match,project])
+
+
+
+
+
+// Question 6 - $match, $group on 2 keys, $push
+//  Group all events by category and month (key=listing_type, key=listing_date, respectively),
+// sum the total revenue. Sort by revenue and limit to 3 results.
+group = {$group:{
+    _id:{
+        Category:"$listing_type",
+        Month: {$month:"$listing_date"}},
+    revenue:{$sum:{$multiply:[{$size:"$paid_users"},"$price"]}}
+    }}
+    
+sort = {$sort:{"revenue":-1}} 
+limit= {$limit:3}
+query = db.listings.aggregate([group,sort,limit])
+
+
+
+// Question 7 - same as last, $week
+// Similar to the previous question, group events by category(listing_category) and week. 
+// Which was the most revenue generating week(operator = $week)? How many events were there in that week,  
+// what are the names, prices and dates of those events? What about avg revenue per event?
+group = {$group: {
+    _id:{
+        listing_type:"$listing_category",
+        week:{$week:"$listing_date"}
+    },
+    total: {$sum: {$multiply:[{$size:"$paid_users"},"$price"]} }, 
+
+}}
+
+sort = {$sort:{"total":-1}}
+limit={$limit:1}
+query = db.listings.aggregate([group,sort,limit])
+// Week 46 generates most revenue
+
+group = {$group:{
+    _id:{Category:"$listing_category",
+    Week: {$week:"$listing_date"}},
+    num_of_events: {$sum:1},
+    total: {$sum: {$multiply:[{$size:"$paid_users"},"$price"]}},
+    event:{$push:{name:"$title",price:"$price",date:"$listing_date",Week: {$week:"$listing_date"}}},
+    
+}}
+match = {$match:{"event.Week":46}}
+project = {$project:{"num_of_events":1,"event.name":1,"event.price":1,"event.date":1,total:1,avg_revenue:{$divide:["$total","$num_of_events"]}}}
+query = db.listings.aggregate([group,match,project])
+
+
+
+
+// Question 8 
+// Group all paid events (listings collection) by month and year starting in or 
+// after June 1, 2016 (ISODate). Per group, calculate revenue, and number of events.
+// Sort by revenue and limit to 3 results.
+match_1 = {$match: {"paid_users": {$ne: []}}}
+match_2 = {$match: {"listing_date":{$gte:ISODate("2016-06-01")}}}
+
+group = {$group:{
+    _id:{month:{$month:"$listing_date"},year:{$year:"$listing_date"}},
+    revenue:{$sum:{$multiply:[{$size:"$paid_users"},"$price"]}},
+    number_of_events:{$sum:1}
+}}
+
+sort = {$sort:{revenue:-1}}
+limit = {$limit:3}
+query = db.listings.aggregate([match_1,match_2,group, sort,limit])
+
+
+
+// Question 9
+// Similar to question 8, what if we only wanted to look at events that
+// had at least 5 paid users? Structure the pipeline to first have a $project stage.
+match1={$match:{"paid_users": {$ne: []}}}
+match={$match:{"listing_date":{$gte:ISODate("2016-06-01")}}}
+
+project={$project:{
+    _id:1,listing_date:1,paid_users:1,price:1,size:{$size:"$paid_users"}
+
+}}
+match2={$match:{"size":{$gte:5}}}
+
+group = {$group: {
+    _id:{
+        year:{$year:"$listing_date"},
+        month:{$month:"$listing_date"}
+       
+    },
+    total: {$sum: {$multiply:[{$size:"$paid_users"},"$price"]} }, 
+    count:{$sum:1}
+
+}}
+
+query = db.listings.aggregate([match1,match,project,match2,group])
+
+
+
+
+// Question 10 - $group by 2 parameters
+// Group all paid events (listings collection) by week and month before Dec 31, 2016 (ISODate). 
+// Sort by count and limit to 2 results.
+match1={$match:{"paid_users": {$ne: []}}}
+match={$match:{"listing_date":{$lt:ISODate("2016-12-31")}}}
+
+group = {$group:{
+    _id:{
+        week:{$week:"$listing_date"},
+        month:{$month:"$listing_date"}
+},
+count: {$sum:1}
+}}
+
+sort={$sort:{"count":-1}}
+limit={$limit:2}
+
+query = db.listings.aggregate([match1,match,group,sort,limit])
+
+
+
+
+
+// Question 11 - $unwind
+// For inboxes (collection=inboxes),which users by 
+// username (key=userData.profileName) are included in conversations the most?
+unwind = {$unwind:"$userData"}
+
+group = {$group:{    
+    _id:{        
+        username:"$userData.profileName"},
+    count: {$sum:1}}}
+
+limit = {$limit:1}
+sort = {$sort:{"count":-1}}
+query = db.inboxes.aggregate([unwind,group,sort,limit])
+
+
+
+
+// Question 12 - $unwind
+// Given event (listings collection) that are not Private (key=isPrivate), find the 
+// categories (key=categories) that are used the most for events. Sort by 
+// this count and only return counts which are at least equal to 5.
+match_1 = {$match:{"isPrivate":false}}
+unwind = {$unwind:"$categories"}
+group = {$group:{
+    _id:{category: "$categories"},
+    count:{$sum:1}
+}}
+sort = {$sort:{count:-1}}
+match_2 = {$match:{"count":{$gte:5}}}
+query = db.listings.aggregate([match_1,unwind,group,sort,match_2])
+
+
+
+
+
+// Question 13 - double group
+//Only for non-private pins (key=isPrivate), group pins
+//by share count (key=board_array) and pin category(key=pin_categories)
+//and also return names (key=title) of those pins. Return only groups
+//with greater than 2 shares. Then group by category and sum the
+//otal number of shares while retaining the pins from the previous groupings
+//and their respective share count. Sort by total share count descending.
+
+match = {$match:{"isPrivate":false}}
+group = {$group:{    
+    _id:{        
+     shareCount:"$board_array",        
+     pinCategory:"$pin_categories"},
+names:{$push:{name:"$title"}},
+count:{$sum:{$size:"$board_array"}}}}
+
+project = {$project: {_id:0, categories:"$_id","countNum":"$count"}}
+match2 = {$match:{"countNum":{$gt:2}}}
+sort = {$sort:{"countNum":-1}}
+query = db.pins.aggregate([match,group,project,sort,match2])
+
+
+
+
+//**********************// 
+//***** Approach ******//
+// ******************** //
+// Section worth 8 points
+
+// Question 1
+// What are some of the pros/cons of the .find() query? 
+// Answer: Advantage: .find() can easily do listing and interpreting.
+//         Disadvantage: .find() can not do advanced calculations and transforming of documents 
+
+// Question 2
+// What is the aggregation pipeline and in what cases we should use it?
+// Answer: The aggregation pipeline is a framework for data aggregation modeled on the concept of data processing pipelines. 
+// Documents enter a multi-stage pipeline that transforms the documents into aggregated results.
+// We shall use it when doing advanced calculations or data processing
+
+// Question 3
+// Can you describe what is basically happening in this query?
+// Car Collection
+
+//match = {$match: {
+//   "car_make": "tesla"
+//}}
+//group={$group:{
+//   _id:{
+//        color:"$color",
+//        month:{$month: "date_sold"}
+//    },
+//   tr:{$sum:{$multiply:["$price", "$numSold"]}},
+//}}
+//sort = {"tr":-1}
+
+//db.cars.aggregate([match, group])
+
+// Answer: 
+// the match operator finds the records whose "car_make" is "tesla";
+// The group operator collects all documents with the same 'color' and same 'date_sold'.
+//     The $month operator converts the values of the 'date_sold' to integer representations of the month. 
+//     Then the $group operator create a new document with two fields:
+//        _id: which contains a nested document with the color and the month of 'date_sold';
+//        tr: which is a generated field that calculate the price* numsold for each "_id"
+// The sort operator sorts the tr in descending order.
+// Finally, this pipeline give us color, month of sold date, and total revenue of 'tesla' cars, which is in a descending order for total revenue.
+
+
+
+
+
+//**********************// 
+//*** Implementation ****//
+// ******************** //
+// Each problem is worth 8 points
+// General References for below:
+// SQL to Aggregate Pipeline - https://docs.mongodb.com/manual/reference/sql-aggregation-comparison/
+// Agg Pipeline Quick Reference - https://docs.mongodb.com/manual/meta/aggregation-quick-reference/#text-expression-operator
+// The above, especially the Quick Reference will contain all the reference material for all the functions below.
+// If you a question, visit the quick reference, read about the relevant operator and click on on it to learn more. 
+
+
+
+
+// Question 4 - $group on key, $match, $group, $project, $multiply, $size
+// For each unique event(listings collection) category (key=listing_type), sum the 
+// price (key=price) over all  events in that category 
+group = {$group: {
+    _id:"$listing_type", 
+    total:{$sum: "$price"}
+}}
+
+project = {$project: {_id:0, listing_type:"$_id", Sum_Of_Price:"$total"}}
+query = db.listings.aggregate([ group, project])
+
+
+// Question 5 - $match and $match (having) after $group, $project
+// Same as the previous question, but only show for where the revenue (size of 
+// paid_users and $price key) is greater than ($gt) 100. Return the grouped by 
+// parameter as "category", the revenue paid attendees (key=paid_users), and 
+// compute the average amount spent. Exlude the _id.
+group = {$group:{
+    _id: "$listing_type",
+    revenue: {$sum:{$multiply:[{$size:"$paid_users"},"$price"]}},
+    count:{$sum:{$size:"$paid_users"}}
+}}
+
+match = {$match:{"revenue":{$gt:100}}}
+
+project = {$project:{_id:0,Category:"$_id",Revenue_Paid_Attendees: "$revenue",Average_Amount_Spent:{$divide:["$revenue","$count"]}}}
+
+query = db.listings.aggregate([group,match,project])
+
+
+
+
+
+// Question 6 - $match, $group on 2 keys, $push
+//  Group all events by category and month (key=listing_type, key=listing_date, respectively),
+// sum the total revenue. Sort by revenue and limit to 3 results.
+group = {$group:{
+    _id:{
+        Category:"$listing_type",
+        Month: {$month:"$listing_date"}},
+    revenue:{$sum:{$multiply:[{$size:"$paid_users"},"$price"]}}
+    }}
+    
+sort = {$sort:{"revenue":-1}} 
+limit= {$limit:3}
+query = db.listings.aggregate([group,sort,limit])
+
+
+
+// Question 7 - same as last, $week
+// Similar to the previous question, group events by category(listing_category) and week. 
+// Which was the most revenue generating week(operator = $week)? How many events were there in that week,  
+// what are the names, prices and dates of those events? What about avg revenue per event?
+group = {$group: {
+    _id:{
+        listing_type:"$listing_category",
+        week:{$week:"$listing_date"}
+    },
+    total: {$sum: {$multiply:[{$size:"$paid_users"},"$price"]} }, 
+
+}}
+
+sort = {$sort:{"total":-1}}
+limit={$limit:1}
+query = db.listings.aggregate([group,sort,limit])
+// Week 46 generates most revenue
+
+group = {$group:{
+    _id:{Category:"$listing_category",
+    Week: {$week:"$listing_date"}},
+    num_of_events: {$sum:1},
+    total: {$sum: {$multiply:[{$size:"$paid_users"},"$price"]}},
+    event:{$push:{name:"$title",price:"$price",date:"$listing_date",Week: {$week:"$listing_date"}}},
+    
+}}
+match = {$match:{"event.Week":46}}
+project = {$project:{"num_of_events":1,"event.name":1,"event.price":1,"event.date":1,total:1,avg_revenue:{$divide:["$total","$num_of_events"]}}}
+query = db.listings.aggregate([group,match,project])
+
+
+
+
+// Question 8 
+// Group all paid events (listings collection) by month and year starting in or 
+// after June 1, 2016 (ISODate). Per group, calculate revenue, and number of events.
+// Sort by revenue and limit to 3 results.
+match_1 = {$match: {"paid_users": {$ne: []}}}
+match_2 = {$match: {"listing_date":{$gte:ISODate("2016-06-01")}}}
+
+group = {$group:{
+    _id:{month:{$month:"$listing_date"},year:{$year:"$listing_date"}},
+    revenue:{$sum:{$multiply:[{$size:"$paid_users"},"$price"]}},
+    number_of_events:{$sum:1}
+}}
+
+sort = {$sort:{revenue:-1}}
+limit = {$limit:3}
+query = db.listings.aggregate([match_1,match_2,group, sort,limit])
+
+
+
+// Question 9
+// Similar to question 8, what if we only wanted to look at events that
+// had at least 5 paid users? Structure the pipeline to first have a $project stage.
+match1={$match:{"paid_users": {$ne: []}}}
+match={$match:{"listing_date":{$gte:ISODate("2016-06-01")}}}
+
+project={$project:{
+    _id:1,listing_date:1,paid_users:1,price:1,size:{$size:"$paid_users"}
+
+}}
+match2={$match:{"size":{$gte:5}}}
+
+group = {$group: {
+    _id:{
+        year:{$year:"$listing_date"},
+        month:{$month:"$listing_date"}
+       
+    },
+    total: {$sum: {$multiply:[{$size:"$paid_users"},"$price"]} }, 
+    count:{$sum:1}
+
+}}
+
+query = db.listings.aggregate([match1,match,project,match2,group])
+
+
+
+
+// Question 10 - $group by 2 parameters
+// Group all paid events (listings collection) by week and month before Dec 31, 2016 (ISODate). 
+// Sort by count and limit to 2 results.
+match1={$match:{"paid_users": {$ne: []}}}
+match={$match:{"listing_date":{$lt:ISODate("2016-12-31")}}}
+
+group = {$group:{
+    _id:{
+        week:{$week:"$listing_date"},
+        month:{$month:"$listing_date"}
+},
+count: {$sum:1}
+}}
+
+sort={$sort:{"count":-1}}
+limit={$limit:2}
+
+query = db.listings.aggregate([match1,match,group,sort,limit])
+
+
+
+
+
+// Question 11 - $unwind
+// For inboxes (collection=inboxes),which users by 
+// username (key=userData.profileName) are included in conversations the most?
+unwind = {$unwind:"$userData"}
+
+group = {$group:{    
+    _id:{        
+        username:"$userData.profileName"},
+    count: {$sum:1}}}
+
+limit = {$limit:1}
+sort = {$sort:{"count":-1}}
+query = db.inboxes.aggregate([unwind,group,sort,limit])
+
+
+
+
+// Question 12 - $unwind
+// Given event (listings collection) that are not Private (key=isPrivate), find the 
+// categories (key=categories) that are used the most for events. Sort by 
+// this count and only return counts which are at least equal to 5.
+match_1 = {$match:{"isPrivate":false}}
+unwind = {$unwind:"$categories"}
+group = {$group:{
+    _id:{category: "$categories"},
+    count:{$sum:1}
+}}
+sort = {$sort:{count:-1}}
+match_2 = {$match:{"count":{$gte:5}}}
+query = db.listings.aggregate([match_1,unwind,group,sort,match_2])
+
+
+
+
+
+// Question 13 - double group
+//Only for non-private pins (key=isPrivate), group pins
+//by share count (key=board_array) and pin category(key=pin_categories)
+//and also return names (key=title) of those pins. Return only groups
+//with greater than 2 shares. Then group by category and sum the
+//otal number of shares while retaining the pins from the previous groupings
+//and their respective share count. Sort by total share count descending.
+
+match = {$match:{"isPrivate":false}}
+group = {$group:{    
+    _id:{        
+     shareCount:"$board_array",        
+     pinCategory:"$pin_categories"},
+names:{$push:{name:"$title"}},
+count:{$sum:{$size:"$board_array"}}}}
+
+project = {$project: {_id:0, categories:"$_id","countNum":"$count"}}
+match2 = {$match:{"countNum":{$gt:2}}}
+sort = {$sort:{"countNum":-1}}
+query = db.pins.aggregate([match,group,project,sort,match2])
+
+
+
+
