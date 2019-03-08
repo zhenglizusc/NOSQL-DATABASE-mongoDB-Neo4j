@@ -1,0 +1,110 @@
+//**********************// 
+//***** Approach ******//
+// ******************** //
+
+// 1. How would you write this in Cypher: 
+// A teacher who teaches a student who lives in Los Angeles and attends USC. 
+// Set your own variables, create the necessary relationships and properties.
+
+//label:Person,State,University
+//node: t,st,s,u
+//properties: s.abbr,u.abbr
+//relationship: [:TEACH],[:LIVES_IN],[:ATTEND]
+match (t:Person)-[:TEACH]->(st:Person),(st)-[:LIVES_IN]->(s:State), (st)-[:ATTEND]->(u:University)
+where s.abbr ='LA' and u.abbr = 'USC'
+return t.name as Teacher
+
+
+
+// 2. What are some gains/advantages of Graph? What are some of the SQL pains
+// Gains of Graph:Easy to model and store relationshipsUses pointers to do traversal; Performance of 
+// relationship traversal remains constant with growth in data size; Queries are shortened and more 
+// readable; Adding additional properties and relationships can be done on the fly
+
+//SQL pains:Complex to model and store relationships; Uses indexes for connecting data
+//          Performance degrades with increases in data; Queries get long and complex; Maintenance is painful
+
+
+
+
+// 3. The WITH clause in Cypher is similar to which operator in Mongodb? In relational?
+// In Mongodb, 'WITH' is similar to '$project'; In relational, 'WITH' is similar to 'select'
+
+
+
+// 4. Place the building blocks of Neo4j in the context of MongoDB. See below:
+// Nodes = Document
+// Labels = Collection
+// Relationships = Embedded documents
+// Properties = Field
+
+
+
+//***********************// 
+//*** Implementation ***//
+// ******************* //
+
+
+// Question 5
+// Find all actors where the total earnings is greater than 100,000,000 and have played in more than 5 movies.
+// Limit to 2 results and sort by the their total earnings descending.
+match(p:Person)-[r:ACTED_IN]->(m)
+WITH p.name as Actor, sum(r.earnings) as Total_Earning,count(m) as Count
+where Total_Earning>10000000 and Count>5
+return Actor,Total_Earning
+order by Total_Earning desc
+limit 2
+
+
+// Question 6
+// Return a list of actors grouped by birth year (node.born), displaying the total number of actors in that list,
+// and total earnings for that grouping. Sort by total earnings and limit to 3 results.
+match (a)-[r:ACTED_IN]->()
+with a.born as BirthYear, count(distinct a.name) as ActorNum, collect(distinct a.name) as Actor,sum(r.earnings) as Earnings
+return BirthYear,Actor, ActorNum,Earnings
+order by Earnings desc
+limit 3
+
+
+// Question 7
+// List 5 friends (via the :HAS_CONTACT relationship) of friends of Tom Hanks who
+// he doesn't know immediately and is not himself. Return their names and order by names descending.
+MATCH (p1:Person{name:"Tom Hanks"})-[:HAS_CONTACT*2]-(p3:Person)
+WHERE NOT (p1)-[:HAS_CONTACT]-(p3)
+RETURN distinct(p3.name) as Friends
+order by Friends desc
+limit 5
+
+
+
+
+
+// Question 8
+// List top 3 results for movies writers and directors that worked together based on the total count of
+// actors that have worked in their movies (descending). Show the list of movies they worked on together.
+// Return a list of the unique Actors, Total number of actors, list of movie titles and make sure that that director
+// and writer are not the same person
+match (a)-[:ACTED_IN]->(m), (w)-[:WROTE]->(m)<-[:DIRECTED]-(d)
+where w.name <> d.name
+return w.name as Writer, d.name as Director,collect(distinct(a.name)) as Actor, count(a.name) as Total_Number_of_Actors,collect(distinct m.title) as Movie_Title
+order by Total_Number_of_Actors desc limit 3
+
+
+
+// Question 9
+// List the second-degree actors in Tom???s network with whom he has not acted with but could. 
+match(c:Person{name:"Tom Hanks"}) -[:ACTED_IN]->()<-[:ACTED_IN]-(other),
+(other)-[:ACTED_IN]->(m1)<-[:ACTED_IN]-(other2) 
+where not (c)-[:ACTED_IN]->(m1) and c<>other2
+return distinct other2.name
+
+
+
+// Question 10
+// Same as the last problem, but only show the people that Tom Hanks already knows (:HAS_CONTACT) with because
+// then he could easily get a hold of them for his next movie!
+match(c:Person{name:"Tom Hanks"}) -[:ACTED_IN]->()<-[:ACTED_IN]-(other),
+(other)-[:ACTED_IN]->(m1)<-[:ACTED_IN]-(other2), 
+(c)-[:HAS_CONTACT]-(other2)
+where not (c)-[:ACTED_IN]->(m1) and c<>other2
+return distinct other2.name
